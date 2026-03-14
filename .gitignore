@@ -1,6 +1,8 @@
-instance/
+venv/
 __pycache__/
 *.pyc
+.env
+instance/
 
 # Logs
 logs
