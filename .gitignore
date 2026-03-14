@@ -2,6 +2,17 @@ instance/
 __pycache__/
 *.pyc
 
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# ML model weight files (large binaries, auto-downloaded at runtime)
+*.pt
+*.pth
+*.onnx
+*.bin
+
 # Logs
 logs
 *.log

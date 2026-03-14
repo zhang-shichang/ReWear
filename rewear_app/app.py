@@ -1,6 +1,49 @@
 from flask import Flask, request, jsonify, session
 from models import db, User
+from detector import detect_clothing
+import cv2
+import numpy as np
+import base64
+
 app = Flask(__name__)
+
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
+
+
+@app.route("/api/detect", methods=["POST", "OPTIONS"])
+def detect():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    data = request.get_json()
+    if not data or "image" not in data:
+        return jsonify({"error": "No image provided"}), 400
+
+    try:
+        # Strip the data-URL prefix if present (e.g. "data:image/jpeg;base64,...")
+        image_b64 = data["image"]
+        if "," in image_b64:
+            image_b64 = image_b64.split(",", 1)[1]
+
+        image_bytes = base64.b64decode(image_b64)
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        image_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if image_bgr is None:
+            return jsonify({"error": "Could not decode image"}), 400
+
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        detections = detect_clothing(image_rgb)
+        return jsonify({"detections": detections})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 #configurations 
 app.config['SECRET_KEY'] = 'dev-secret-key'
@@ -89,5 +132,5 @@ def me():
     })
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5001)
 

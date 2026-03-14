@@ -3,9 +3,12 @@ import { Camera, RefreshCw, Check, Plus, Loader2, Sparkles, Upload, Calendar, Ed
 import { useWardrobe } from '../WardrobeContext';
 import { ClothingItem } from '../types';
 
+const DETECT_API = "http://localhost:5001/api/detect";
+
 export const CameraView: React.FC = () => {
   const { wardrobe, addOutfit } = useWardrobe();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -18,6 +21,53 @@ export const CameraView: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [noDetectionMsg, setNoDetectionMsg] = useState(false);
+
+  // Send a base64 image to the Flask detection API and update detected items
+  const runDetection = async (imageB64: string) => {
+    setIsDetecting(true);
+    setApiError(null);
+    setNoDetectionMsg(false);
+    try {
+      const res = await fetch(DETECT_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: imageB64 }),
+      });
+      if (!res.ok) {
+        setApiError(`Server error (${res.status})`);
+        return;
+      }
+      const data = await res.json();
+      if (data.detections && data.detections.length > 0) {
+        setDetectedItems(data.detections as ClothingItem[]);
+      } else {
+        setNoDetectionMsg(true);
+        setTimeout(() => setNoDetectionMsg(false), 3000);
+      }
+    } catch (err) {
+      setApiError("Can't reach Flask server — make sure it's running on port 5000");
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
+  // Capture the current video frame as a base64 JPEG string
+  const captureVideoFrame = (): string | null => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState < 2) return null;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    // Mirror the draw to match the CSS scale-x-[-1] flip
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0);
+    return canvas.toDataURL("image/jpeg", 0.8);
+  };
 
   const startCamera = async () => {
     setPermissionError(false);
@@ -45,33 +95,28 @@ export const CameraView: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Simulate Detection Logic
+  // Live detection: scan immediately when ready, then every 5 seconds
   useEffect(() => {
-    if (permissionError) return;
+    if (permissionError || uploadedImage || isLogSuccess) return;
 
-    // Simulate "Scanning" phases
+    // First scan fires after a short delay to let the video stream stabilise
+    const firstScan = setTimeout(() => {
+      const frameB64 = captureVideoFrame();
+      if (frameB64) runDetection(frameB64);
+    }, 1500);
+
     const detectionInterval = setInterval(() => {
-      if (isLogSuccess || editingItemId) return; 
+      if (isLogSuccess || editingItemId) return;
+      const frameB64 = captureVideoFrame();
+      if (frameB64) runDetection(frameB64);
+    }, 5000);
 
-      setIsDetecting(true);
-      
-      // Randomly decide if we found something new (Simulating AI latency)
-      const shouldUpdate = Math.random() > 0.6;
-      
-      if (shouldUpdate) {
-        // Pick 2-4 random items from wardrobe to "detect"
-        const count = Math.floor(Math.random() * 3) + 2;
-        const shuffled = [...wardrobe].sort(() => 0.5 - Math.random());
-        setDetectedItems(shuffled.slice(0, count));
-      }
-
-      // Turn off "actively scanning" visual after a bit
-      setTimeout(() => setIsDetecting(false), 1500);
-
-    }, 4000); // Check every 4 seconds
-
-    return () => clearInterval(detectionInterval);
-  }, [isLogSuccess, permissionError, editingItemId]);
+    return () => {
+      clearTimeout(firstScan);
+      clearInterval(detectionInterval);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLogSuccess, permissionError, editingItemId, uploadedImage]);
 
   const handleLogOutfit = () => {
     addOutfit(detectedItems, selectedDate);
@@ -89,16 +134,14 @@ export const CameraView: React.FC = () => {
       const file = e.target.files[0];
       const url = URL.createObjectURL(file);
       setUploadedImage(url);
-      
-      // In a real app, we would send this to the AI service
-      // For now, we just simulate a detection event
-      setIsDetecting(true);
-      setTimeout(() => {
-        const count = Math.floor(Math.random() * 3) + 2;
-        const shuffled = [...wardrobe].sort(() => 0.5 - Math.random());
-        setDetectedItems(shuffled.slice(0, count));
-        setIsDetecting(false);
-      }, 1500);
+
+      // Read as base64 and send to the real detection API
+      const reader = new FileReader();
+      reader.onload = () => {
+        const b64 = reader.result as string;
+        runDetection(b64);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -193,23 +236,27 @@ export const CameraView: React.FC = () => {
                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border border-white/30 rounded-full animate-pulse" />
             </div>
 
-            {/* Bounding Boxes (Mocked Position) */}
-            {detectedItems.map((item, idx) => {
-              // Generate pseudo-random positions based on index to look realistic
-              const top = 20 + (idx * 15) + (Math.random() * 5);
-              const left = 20 + (idx * 20) + (Math.random() * 5);
-              
-              if (isLogSuccess) return null;
+            {/* Detection status messages */}
+            {apiError && (
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 bg-red-500/90 text-white text-xs font-bold px-4 py-2 rounded-full backdrop-blur-sm">
+                {apiError}
+              </div>
+            )}
+            {noDetectionMsg && !apiError && (
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 bg-black/60 text-white/80 text-xs px-4 py-2 rounded-full backdrop-blur-sm">
+                No clothing detected — try moving closer or adjusting lighting
+              </div>
+            )}
 
+            {/* Bounding box labels — positioned deterministically by index */}
+            {!isLogSuccess && detectedItems.map((item, idx) => {
+              const top  = 15 + (idx * 18) % 55;
+              const left = 10 + (idx * 22) % 50;
               return (
-                <div 
+                <div
                   key={item.id}
                   className="absolute flex flex-col items-center transition-all duration-700 ease-out animate-in fade-in zoom-in-95"
-                  style={{
-                    top: `${top}%`,
-                    left: `${left}%`,
-                    width: '180px',
-                  }}
+                  style={{ top: `${top}%`, left: `${left}%`, width: '180px' }}
                 >
                   <div className="relative group cursor-pointer">
                     <div className="absolute -inset-2 bg-white/10 backdrop-blur-sm rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -225,16 +272,26 @@ export const CameraView: React.FC = () => {
           </>
         )}
 
-        {/* Upload Button Overlay */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            className="hidden" 
-            accept="image/*" 
+        {/* Bottom button bar */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept="image/*"
             onChange={handleFileUpload}
           />
-          <button 
+          {!uploadedImage && (
+            <button
+              onClick={() => { const f = captureVideoFrame(); if (f) runDetection(f); }}
+              disabled={isDetecting}
+              className="flex items-center gap-2 px-6 py-3 bg-white/20 backdrop-blur-md border border-white/30 text-white rounded-full hover:bg-white/30 transition-all shadow-lg disabled:opacity-50"
+            >
+              <RefreshCw size={18} className={isDetecting ? 'animate-spin' : ''} />
+              <span>{isDetecting ? 'Scanning…' : 'Scan Now'}</span>
+            </button>
+          )}
+          <button
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-2 px-6 py-3 bg-primary-500/90 backdrop-blur-md border border-primary-400 text-white rounded-full hover:bg-primary-600 transition-all shadow-lg"
           >
@@ -376,6 +433,9 @@ export const CameraView: React.FC = () => {
 
       </div>
       
+      {/* Hidden canvas used to capture video frames for the detection API */}
+      <canvas ref={canvasRef} className="hidden" />
+
       {/* CSS for Scan Animation */}
       <style>{`
         @keyframes scan {
