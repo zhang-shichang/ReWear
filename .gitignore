@@ -1,8 +1,9 @@
-instance/
+venv/
 __pycache__/
 *.pyc
-venv/
 rewear_app/uploads/
+.env
+instance/
 
 # Logs
 logs
