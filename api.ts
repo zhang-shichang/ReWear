@@ -54,6 +54,7 @@ export interface ApiItem {
   color: string;
   brand: string;
   addedDate: string;
+  postponedUntil?: string;
   cost: number | null;
 }
 

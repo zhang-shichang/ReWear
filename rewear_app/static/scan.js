@@ -130,7 +130,7 @@ function submitLook() {
   })
   .then(r => r.json())
   .then(data => {
-    console.log('Saved:', data);
+    
     toast('Outfit saved!');
   })
   .catch(() => toast('Error — check console'));

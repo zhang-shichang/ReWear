@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Camera, Check, Plus, Loader2, Upload, Calendar, Edit2, X, Search } from 'lucide-react';
 import { useWardrobe } from '../WardrobeContext';
-import { ClothingItem } from '../types';
+import { Category, ClothingItem } from '../types';
 import heic2any from 'heic2any';
 import { detectionApi } from '../api';
 
@@ -24,7 +24,9 @@ export const CameraView: React.FC = () => {
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', category: 'Top' as any, color: '' });
+  const [editForm, setEditForm] = useState<{ name: string; category: Category; color: string }>(
+    { name: '', category: 'Top', color: '' }
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [logError, setLogError] = useState('');
@@ -49,6 +51,19 @@ export const CameraView: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Track the current object URL so we can revoke it before creating a new one
+  // (fix: object URL memory leak)
+  const objectUrlRef = useRef<string | null>(null);
+
+  // Revoke on unmount
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+    };
+  }, []);
+
   // ── Capture frame from live camera ─────────────────────────────────────────
   const captureFrame = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -61,12 +76,17 @@ export const CameraView: React.FC = () => {
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0);
-    // Store preview
+    // Store preview, revoking the previous object URL first
     canvas.toBlob(blob => {
       if (!blob) return;
       const file = new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
       setUploadedFile(file);
-      setUploadedImage(URL.createObjectURL(blob));
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+      const url = URL.createObjectURL(blob);
+      objectUrlRef.current = url;
+      setUploadedImage(url);
     }, 'image/jpeg', 0.85);
     // Send to real detection API
     runDetection(canvas.toDataURL('image/jpeg', 0.85));
@@ -85,6 +105,8 @@ export const CameraView: React.FC = () => {
       if (data.detections?.length > 0) {
         setDetectedItems(data.detections as ClothingItem[]);
       } else {
+        // Clear any stale detections from a previous scan
+        setDetectedItems([]);
         setNoDetectionMsg(true);
         setTimeout(() => setNoDetectionMsg(false), 3000);
       }
@@ -118,18 +140,23 @@ export const CameraView: React.FC = () => {
     }
 
     setUploadedFile(file);
-    
+
     // Instead of raw readAsDataURL which causes backend Payload/cv2-decoding 400s
     // onto giant or exotic formats, paint onto a localized Canvas converting it
     // efficiently to a standardized Web-safe JPEG.
+    // Revoke the previous object URL before creating a new one.
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+    }
     const url = URL.createObjectURL(file);
+    objectUrlRef.current = url;
     setUploadedImage(url);
-    
+
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
       let { width, height } = img;
-      
+
       // constrain massive multi-megabyte photos saving API payload overhead
       const MAX_DIM = 1080;
       if (width > MAX_DIM || height > MAX_DIM) {
@@ -139,7 +166,7 @@ export const CameraView: React.FC = () => {
       }
       canvas.width = width;
       canvas.height = height;
-      
+
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.fillStyle = 'white'; // fill transparent backgrounds
@@ -279,12 +306,21 @@ export const CameraView: React.FC = () => {
             )}
 
             {/* Bounding Box Labels */}
-            {!isLogSuccess && detectedItems.map((item, idx) => {
-              const top = 20 + (idx * 15);
-              const left = 20 + (idx * 20);
+            {!isLogSuccess && detectedItems.map((item) => {
+              // Use the actual bbox coordinates returned by the model so labels
+              // appear at the correct on-screen location. Fall back to a neutral
+              // centre position when coordinates are unavailable.
+              const bboxX: number = (item as any).bbox_x ?? 50;
+              const bboxY: number = (item as any).bbox_y ?? 50;
+              const bboxW: number = (item as any).bbox_w ?? 0;
+              const bboxH: number = (item as any).bbox_h ?? 0;
+              // Position the label at the top-left corner of the bounding box.
+              // bbox values are expected as percentages of the image dimensions.
+              const top = bboxY;
+              const left = bboxX + bboxW / 2;
               return (
                 <div key={item.id} className="absolute flex flex-col items-center transition-all duration-700 ease-out animate-in fade-in zoom-in-95"
-                  style={{ top: `${top}%`, left: `${left}%`, width: '180px' }}>
+                  style={{ top: `${top}%`, left: `${left}%`, width: '180px', transform: 'translateX(-50%)' }}>
                   <div className="relative group cursor-pointer">
                     <div className="absolute -inset-2 bg-white/10 backdrop-blur-sm rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
                     <div className="w-3 h-3 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] animate-pulse" />
@@ -385,7 +421,7 @@ export const CameraView: React.FC = () => {
                             <input type="text" value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})}
                               className="w-full font-serif italic text-lg border-b border-primary-300 bg-transparent focus:outline-none focus:border-primary-500" autoFocus placeholder="Item Name"/>
                             <div className="flex gap-2">
-                              <select value={editForm.category} onChange={(e) => setEditForm({...editForm, category: e.target.value as any})}
+                              <select value={editForm.category} onChange={(e) => setEditForm({...editForm, category: e.target.value as Category})}
                                 className="w-1/2 text-[10px] font-bold uppercase tracking-widest border-b border-primary-300 bg-transparent focus:outline-none focus:border-primary-500 pb-1 cursor-pointer">
                                 {['Top', 'Bottom', 'Shoes', 'Outerwear', 'Accessory'].map(c => <option key={c} value={c}>{c}</option>)}
                               </select>

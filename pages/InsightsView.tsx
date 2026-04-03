@@ -10,8 +10,11 @@ import { Outfit } from '../types';
 export const InsightsView: React.FC = () => {
   const { wardrobe, outfits, postponeItem } = useWardrobe();
   const [selectedOutfit, setSelectedOutfit] = useState<Outfit | null>(null);
+  const [selectedItemInfo, setSelectedItemInfo] = useState<any | null>(null);
   const [postponeModalItem, setPostponeModalItem] = useState<string | null>(null);
   const [postponeDate, setPostponeDate] = useState('');
+  const [showAllForgotten, setShowAllForgotten] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
   
   // Data prep for charts
   const categoryData = React.useMemo(() => {
@@ -165,9 +168,9 @@ export const InsightsView: React.FC = () => {
             </div>
             <p className="text-sm text-stone-500 mb-6 italic">These pieces haven't seen the light in over 30 days.</p>
             <div className="flex-1 overflow-y-auto space-y-4 pr-2 no-scrollbar">
-              {forgottenItems.slice(0, 6).map(item => (
+              {(showAllForgotten ? forgottenItems : forgottenItems.slice(0, 6)).map(item => (
                 <div key={item.id} className="flex items-center gap-4 group cursor-pointer hover:bg-stone-50 p-2 -mx-2 rounded-xl transition-colors">
-                  <img src={item.image} className="w-14 h-14 rounded-lg object-cover bg-stone-100 shadow-sm" alt={item.name} />
+                  <img src={item.image || '/placeholder-garment.svg'} className="w-14 h-14 rounded-lg object-cover bg-stone-100 shadow-sm" alt={item.name} />
                   <div className="flex-1">
                     <p className="font-semibold text-stone-800 text-sm">{item.name}</p>
                     <p className="text-xs text-stone-400">Last worn: {item.lastWorn}</p>
@@ -184,9 +187,14 @@ export const InsightsView: React.FC = () => {
                 </div>
               ))}
             </div>
-            <button className="w-full py-3 mt-6 border border-stone-200 text-stone-400 text-xs font-bold uppercase tracking-widest hover:border-primary-500 hover:text-primary-500 transition-all rounded-xl">
-              View All Forgotten
-            </button>
+            {forgottenItems.length > 6 && (
+              <button 
+                onClick={() => setShowAllForgotten(!showAllForgotten)}
+                className="w-full py-3 mt-6 border border-stone-200 text-stone-400 text-xs font-bold uppercase tracking-widest hover:border-primary-500 hover:text-primary-500 transition-all rounded-xl"
+              >
+                {showAllForgotten ? "Show Less" : "View All Forgotten"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -239,7 +247,10 @@ export const InsightsView: React.FC = () => {
                     <span className="text-3xl font-bold text-primary-500">{mostWorn.wearCount}</span>
                     <span className="text-stone-400 text-sm ml-1">wears</span>
                   </div>
-                  <button className="px-4 py-2 bg-stone-900 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-primary-600 transition-colors">
+                  <button 
+                    onClick={() => setSelectedItemInfo(mostWorn)}
+                    className="px-4 py-2 bg-stone-900 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-primary-600 transition-colors"
+                  >
                     Details
                   </button>
                 </div>
@@ -255,7 +266,7 @@ export const InsightsView: React.FC = () => {
           <div className="bg-white p-8 rounded-2xl border border-stone-100 shadow-sm flex flex-col h-[480px]">
             <h3 className="text-xl font-bold text-stone-800 mb-6">Recent Outfits</h3>
             <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar">
-              {outfits.slice(0, 5).map((outfit) => (
+              {(showAllHistory ? outfits : outfits.slice(0, 5)).map((outfit) => (
                 <div 
                   key={outfit.id} 
                   onClick={() => setSelectedOutfit(outfit)}
@@ -264,7 +275,7 @@ export const InsightsView: React.FC = () => {
                   <div className="grid grid-cols-2 gap-0.5 w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-stone-100 shadow-sm">
                     {outfit.items.slice(0,4).map((itemId, i) => {
                       const item = wardrobe.find(w => w.id === itemId);
-                      return item ? <img key={i} src={item.image} className="w-full h-full object-cover" /> : null
+                      return item ? <img key={i} src={item.image || '/placeholder-garment.svg'} className="w-full h-full object-cover" /> : null
                     })}
                   </div>
                   <div>
@@ -274,9 +285,14 @@ export const InsightsView: React.FC = () => {
                 </div>
               ))}
             </div>
-            <button className="w-full py-3 mt-6 border border-stone-100 text-stone-400 text-[10px] font-bold uppercase tracking-widest hover:text-stone-800 transition-colors">
-              View History
-            </button>
+            {outfits.length > 5 && (
+              <button 
+                onClick={() => setShowAllHistory(!showAllHistory)}
+                className="w-full py-3 mt-6 border border-stone-100 text-stone-400 text-[10px] font-bold uppercase tracking-widest hover:text-stone-800 transition-colors"
+              >
+                {showAllHistory ? "Show Less" : "View History"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -358,6 +374,64 @@ export const InsightsView: React.FC = () => {
                   className="px-8 py-3 bg-stone-900 text-white text-xs font-bold uppercase tracking-widest hover:bg-primary-600 transition-colors rounded-xl"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item Detail Modal */}
+      {selectedItemInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-stone-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-serif italic text-stone-900">{selectedItemInfo.name}</h3>
+                <p className="text-xs font-bold tracking-widest uppercase text-stone-400 mt-1">{selectedItemInfo.category}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedItemInfo(null)}
+                className="p-2 text-stone-400 hover:text-stone-900 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-8">
+              <div className="w-full aspect-[4/5] sm:aspect-[3/4] bg-stone-100 rounded-xl overflow-hidden mb-6">
+                <img src={selectedItemInfo.image || '/placeholder-garment.svg'} className="w-full h-full object-cover" alt={selectedItemInfo.name} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                 <div>
+                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Color</p>
+                   <p className="font-serif text-stone-800">{selectedItemInfo.color || 'Unspecified'}</p>
+                 </div>
+                 <div>
+                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Last Worn</p>
+                   <p className="font-serif text-stone-800">{selectedItemInfo.lastWorn}</p>
+                 </div>
+                 <div>
+                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Wear Count</p>
+                   <p className="font-serif text-stone-800">{selectedItemInfo.wearCount}</p>
+                 </div>
+                 {selectedItemInfo.cost ? (
+                   <div>
+                     <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Cost / Wear</p>
+                     <p className="font-serif text-stone-800 border-b border-primary-200 inline">
+                       ${(selectedItemInfo.wearCount > 0 ? selectedItemInfo.cost / selectedItemInfo.wearCount : selectedItemInfo.cost).toFixed(2)}
+                     </p>
+                   </div>
+                 ) : null}
+              </div>
+
+              <div className="pt-6 border-t border-stone-100">
+                <button 
+                  onClick={() => setSelectedItemInfo(null)}
+                  className="w-full py-3 bg-stone-900 text-white text-xs font-bold uppercase tracking-widest hover:bg-primary-600 transition-colors rounded-xl"
+                >
+                  Close Details
                 </button>
               </div>
             </div>

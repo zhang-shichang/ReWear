@@ -1,22 +1,39 @@
 import base64
+import logging
 import os
 import uuid
 from flask import Flask, request, jsonify, session, render_template
 from flask_cors import CORS
 from models import db, User, Item, Outfit, OutfitItem
+from sqlalchemy.orm import joinedload
 from datetime import date
-from detector import detect_clothing 
+from detector import detect_clothing
 import cv2
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-app.config['SECRET_KEY'] = 'dev-secret-key'
+# SECRET_KEY must be set via the SECRET_KEY environment variable in production.
+# For local development a fallback is used, but a warning is logged.
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    _secret_key = 'dev-secret-key-change-in-production'
+    logger.warning(
+        'SECRET_KEY env var not set — using insecure default. '
+        'Set SECRET_KEY in your environment before deploying.'
+    )
+app.config['SECRET_KEY'] = _secret_key
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'
-app.config['SESSION_COOKIE_SECURE'] = False
+
+# Cookie security: in production (PRODUCTION=true) use SameSite=None + Secure=True
+# behind an HTTPS reverse proxy.  In local HTTP dev use Lax + Secure=False.
+_production = os.environ.get('PRODUCTION', '').lower() in ('1', 'true', 'yes')
+app.config['SESSION_COOKIE_SAMESITE'] = 'None' if _production else 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = _production
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
@@ -36,7 +53,7 @@ def require_auth():
     user_id = session.get("user_id")
     if not user_id:
         return None, (jsonify({"error": "Not authenticated"}), 401)
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         session.pop("user_id", None)
         return None, (jsonify({"error": "Not authenticated"}), 401)
@@ -44,12 +61,20 @@ def require_auth():
 
 
 def item_to_dict(item):
-    """Serialize an Item with computed wear stats."""
+    """Serialize an Item with computed wear stats.
+
+    Expects item.outfit_items to be already loaded (via joinedload) so that
+    each outfit_item.outfit is also available without triggering extra queries.
+    """
     wear_count = len(item.outfit_items)
     last_worn = None
     if item.outfit_items:
-        outfits = [Outfit.query.get(oi.outfit_id) for oi in item.outfit_items]
-        dates = [o.worn_date for o in outfits if o is not None]
+        # outfit is available via the backref loaded by joinedload
+        dates = [
+            oi.outfit.worn_date
+            for oi in item.outfit_items
+            if oi.outfit is not None
+        ]
         last_worn = max(dates).isoformat() if dates else None
     return {
         "id": str(item.id),
@@ -61,6 +86,7 @@ def item_to_dict(item):
         "color": item.color or item.ai_color_primary or "",
         "brand": item.brand or "",
         "addedDate": item.created_at.date().isoformat(),
+        "postponedUntil": item.postponed_until.isoformat() if item.postponed_until else None,
         "cost": item.cost,
     }
 
@@ -143,7 +169,16 @@ def get_items():
     user, err = require_auth()
     if err:
         return err
-    items = Item.query.filter_by(user_id=user.id, archived_at=None).all()
+    # Use joinedload to fetch outfit_items and their parent outfits in a single
+    # SQL query, eliminating the N+1 pattern in item_to_dict.
+    items = (
+        Item.query
+        .filter_by(user_id=user.id, archived_at=None)
+        .options(
+            joinedload(Item.outfit_items).joinedload(OutfitItem.outfit)
+        )
+        .all()
+    )
     return jsonify([item_to_dict(i) for i in items])
 
 
@@ -161,7 +196,8 @@ def create_item():
         try:
             mime_part, b64_part = image_val.split(",", 1)
             ext = ".jpg"
-            if "png" in mime_part: ext = ".png"
+            if "png" in mime_part:
+                ext = ".png"
             image_bytes = base64.b64decode(b64_part)
             filename = f"crop_{uuid.uuid4().hex}{ext}"
             save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
@@ -169,7 +205,8 @@ def create_item():
                 f.write(image_bytes)
             image_val = f"/uploads/{filename}"
         except Exception as e:
-            print(f"Failed to decode base64 item image: {e}")
+            logger.error("Failed to decode base64 item image: %s", e)
+            return jsonify({"error": "invalid image data"}), 400
 
     item = Item(
         name=data["name"],
@@ -198,6 +235,17 @@ def update_item(item_id):
     for field in ("name", "category", "color", "brand", "cost", "image_path"):
         if field in data:
             setattr(item, field, data[field])
+            
+    if "postponedUntil" in data:
+        if data["postponedUntil"]:
+            from datetime import date
+            try:
+                item.postponed_until = date.fromisoformat(data["postponedUntil"])
+            except ValueError:
+                pass
+        else:
+            item.postponed_until = None
+
     # allow frontend to send 'image' key too
     if "image" in data:
         item.image_path = data["image"]
@@ -274,7 +322,9 @@ def create_outfit():
 
 
 # ── Static uploads ────────────────────────────────────────────────────────────
-@app.route("/uploads/<path:filename>")
+# Use <string:filename> (no slashes) instead of <path:filename> to prevent
+# directory traversal attacks such as ../../etc/passwd.
+@app.route("/uploads/<string:filename>")
 def uploaded_file(filename):
     from flask import send_from_directory
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
@@ -350,7 +400,10 @@ def detect():
         detections = detect_clothing(image_rgb)
         return jsonify({"detections": detections})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # Log the full exception server-side; return a generic message to the
+        # client so internal details are never leaked.
+        logger.exception("Detection failed: %s", e)
+        return jsonify({"error": "Detection failed"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
