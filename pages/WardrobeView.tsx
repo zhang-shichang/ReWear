@@ -1,14 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { useWardrobe } from '../WardrobeContext';
 import { ClothingItem, Category } from '../types';
-import { ItemCard } from '../components/ItemCard';
-import { Search, X, Plus } from 'lucide-react';
+import { Search, X, Plus, Trash2 } from 'lucide-react';
 
 export const WardrobeView: React.FC = () => {
   const { wardrobe, updateItem, addItem } = useWardrobe();
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<ClothingItem | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const { removeItem, addOutfit } = useWardrobe();
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<{ name: string; category: Category }>({ name: '', category: 'Top' });
@@ -73,7 +75,7 @@ export const WardrobeView: React.FC = () => {
       id: `item-${Date.now()}`,
       name: createForm.name,
       category: createForm.category,
-      image: createForm.image || `https://picsum.photos/seed/${Date.now()}/600/800`,
+      image: createForm.image || `/placeholder-garment.svg`,
       wearCount: 0,
       lastWorn: 'Never',
       color: createForm.color,
@@ -144,8 +146,24 @@ export const WardrobeView: React.FC = () => {
           {filteredItems.map(item => (
             <div key={item.id} onClick={() => { setSelectedItem(item); setIsEditing(false); }} className="group cursor-pointer">
               <div className="aspect-[3/4] overflow-hidden bg-stone-100 mb-4 relative">
-                 <img src={item.image} alt={item.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700 ease-out" />
+                 <img src={item.image || '/placeholder-garment.svg'} alt={item.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700 ease-out" />
                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-500" />
+                 <button 
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (window.confirm('Are you sure you want to delete this piece?')) {
+                      try {
+                        await removeItem(item.id);
+                      } catch (err) {
+                        setDeleteError('Failed to delete item.');
+                        setTimeout(() => setDeleteError(null), 3000);
+                      }
+                    }
+                  }}
+                  className="absolute top-2 right-2 p-1.5 bg-white/80 text-stone-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600"
+                 >
+                  <Trash2 size={16} />
+                 </button>
               </div>
               <div className="text-center">
                 <h3 className="font-serif text-lg text-stone-900 italic group-hover:text-primary-600 transition-colors">{item.name}</h3>
@@ -163,6 +181,12 @@ export const WardrobeView: React.FC = () => {
                 >
                   Clear Filters
                 </button>
+        </div>
+      )}
+
+      {deleteError && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-red-500 text-white px-6 py-3 rounded-full text-sm font-bold shadow-xl animate-in slide-in-from-bottom-5">
+          {deleteError}
         </div>
       )}
 
@@ -264,7 +288,7 @@ export const WardrobeView: React.FC = () => {
             
             {/* Image Side */}
             <div className="w-full md:w-1/2 h-64 md:h-auto relative bg-stone-200">
-              <img src={selectedItem.image} alt={selectedItem.name} className="w-full h-full object-cover" />
+              <img src={selectedItem.image || '/placeholder-garment.svg'} alt={selectedItem.name} className="w-full h-full object-cover" />
               <button 
                 onClick={() => setSelectedItem(null)} 
                 className="absolute top-6 left-6 text-white mix-blend-difference md:hidden"
@@ -341,7 +365,7 @@ export const WardrobeView: React.FC = () => {
                   {recommendedItems.map(rec => (
                     <div key={rec.id} className="group cursor-pointer" onClick={() => setSelectedItem(rec)}>
                        <div className="aspect-[3/4] overflow-hidden bg-stone-100 mb-2">
-                         <img src={rec.image} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" alt={rec.name} />
+                         <img src={rec.image || '/placeholder-garment.svg'} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" alt={rec.name} />
                        </div>
                     </div>
                   ))}
@@ -349,7 +373,13 @@ export const WardrobeView: React.FC = () => {
               </div>
 
               <div className="flex gap-6 mt-8 pt-8 border-t border-stone-200">
-                <button className="flex-1 py-4 bg-primary-500 text-white text-xs font-bold uppercase tracking-widest hover:bg-primary-600 transition-colors shadow-lg shadow-primary-500/20">
+                <button 
+                  onClick={() => {
+                    const today = new Date().toISOString().split('T')[0];
+                    addOutfit([selectedItem], today);
+                  }}
+                  className="flex-1 py-4 bg-primary-500 text-white text-xs font-bold uppercase tracking-widest hover:bg-primary-600 transition-colors shadow-lg shadow-primary-500/20"
+                >
                   Log Wear
                 </button>
                 {isEditing ? (

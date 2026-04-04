@@ -39,6 +39,7 @@ class Item(db.Model):
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     archived_at = db.Column(db.DateTime, nullable=True)  # soft delete
+    postponed_until = db.Column(db.Date, nullable=True)
 
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     tags = db.relationship('ItemTag', backref='item', lazy=True)

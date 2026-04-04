@@ -54,6 +54,7 @@ export interface ApiItem {
   color: string;
   brand: string;
   addedDate: string;
+  postponedUntil?: string;
   cost: number | null;
 }
 
@@ -104,4 +105,12 @@ export const outfitsApi = {
       body: JSON.stringify({ date: wornDate, item_ids: itemIds }),
     });
   },
+};
+
+export const detectionApi = {
+  detect: (imageB64: string) =>
+    request<{ detections: any[] }>('/detect', {
+      method: 'POST',
+      body: JSON.stringify({ image: imageB64 }),
+    }),
 };

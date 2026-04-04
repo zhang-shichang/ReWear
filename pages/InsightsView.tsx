@@ -10,8 +10,11 @@ import { Outfit } from '../types';
 export const InsightsView: React.FC = () => {
   const { wardrobe, outfits, postponeItem } = useWardrobe();
   const [selectedOutfit, setSelectedOutfit] = useState<Outfit | null>(null);
+  const [selectedItemInfo, setSelectedItemInfo] = useState<any | null>(null);
   const [postponeModalItem, setPostponeModalItem] = useState<string | null>(null);
   const [postponeDate, setPostponeDate] = useState('');
+  const [showAllForgotten, setShowAllForgotten] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
   
   // Data prep for charts
   const categoryData = React.useMemo(() => {
@@ -22,18 +25,65 @@ export const InsightsView: React.FC = () => {
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [wardrobe]);
 
-  const usageData = [
-    { name: 'Mon', wears: 2 },
-    { name: 'Tue', wears: 4 },
-    { name: 'Wed', wears: 3 },
-    { name: 'Thu', wears: 5 },
-    { name: 'Fri', wears: 4 },
-    { name: 'Sat', wears: 6 },
-    { name: 'Sun', wears: 1 },
-  ];
+  const usageData = React.useMemo(() => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const counts = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
+    outfits.forEach(o => {
+      const d = new Date(o.date);
+      const dayName = days[d.getUTCDay()];
+      if (dayName) counts[dayName as keyof typeof counts]++;
+    });
+    return [
+      { name: 'Mon', wears: counts.Mon },
+      { name: 'Tue', wears: counts.Tue },
+      { name: 'Wed', wears: counts.Wed },
+      { name: 'Thu', wears: counts.Thu },
+      { name: 'Fri', wears: counts.Fri },
+      { name: 'Sat', wears: counts.Sat },
+      { name: 'Sun', wears: counts.Sun },
+    ];
+  }, [outfits]);
 
   const COLORS = ['#78716c', '#a8a29e', '#d6d3d1', '#e7e5e4', '#57534e'];
   const today = new Date();
+
+  const streak = React.useMemo(() => {
+    if (outfits.length === 0) return 0;
+    const dates = [...new Set(outfits.map(o => o.date))].sort().reverse();
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yestDate = new Date();
+    yestDate.setDate(yestDate.getDate() - 1);
+    const yestStr = yestDate.toISOString().split('T')[0];
+    
+    if (dates[0] !== todayStr && dates[0] !== yestStr) return 0;
+    
+    let currentStreak = 1;
+    let expectedNext = new Date(dates[0]);
+    expectedNext.setDate(expectedNext.getDate() - 1);
+    
+    for (let i = 1; i < dates.length; i++) {
+      if (dates[i] === expectedNext.toISOString().split('T')[0]) {
+        currentStreak++;
+        expectedNext.setDate(expectedNext.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return currentStreak;
+  }, [outfits]);
+
+  const utilization = React.useMemo(() => {
+    if (wardrobe.length === 0) return 0;
+    const wornCount = wardrobe.filter(i => i.wearCount > 0).length;
+    return Math.round((wornCount / wardrobe.length) * 100);
+  }, [wardrobe]);
+
+  const newThisMonth = React.useMemo(() => {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    const startIso = startOfMonth.toISOString().split('T')[0];
+    return wardrobe.filter(i => i.addedDate >= startIso).length;
+  }, [wardrobe]);
 
   const forgottenItems = wardrobe.filter(i => {
     // Check if postponed
@@ -68,21 +118,21 @@ export const InsightsView: React.FC = () => {
           <p className="text-sm font-semibold text-stone-400 uppercase tracking-wider">Total Items</p>
           <p className="text-4xl font-bold text-stone-900 mt-2">{wardrobe.length}</p>
           <div className="flex items-center gap-1 mt-2 text-green-600 text-sm font-medium">
-            <ArrowUpRight size={16} /> <span>+2 this month</span>
+            <ArrowUpRight size={16} /> <span>+{newThisMonth} this month</span>
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
           <p className="text-sm font-semibold text-stone-400 uppercase tracking-wider">Log Streak</p>
-          <p className="text-4xl font-bold text-stone-900 mt-2">5 Days</p>
+          <p className="text-4xl font-bold text-stone-900 mt-2">{streak} Days</p>
           <div className="flex items-center gap-1 mt-2 text-primary-500 text-sm font-medium">
-            <CalendarClock size={16} /> <span>Keep it up!</span>
+            <CalendarClock size={16} /> <span>{streak > 0 ? 'Keep it up!' : 'Start your streak!'}</span>
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm border-l-4 border-l-primary-500">
           <p className="text-sm font-semibold text-stone-400 uppercase tracking-wider">Utilization</p>
-          <p className="text-4xl font-bold text-stone-900 mt-2">68%</p>
+          <p className="text-4xl font-bold text-stone-900 mt-2">{utilization}%</p>
           <div className="w-full bg-stone-100 h-2 rounded-full mt-3 overflow-hidden">
-            <div className="bg-primary-500 h-full w-[68%]"></div>
+            <div className="bg-primary-500 h-full" style={{width: `${utilization}%`}}></div>
           </div>
         </div>
       </div>
@@ -118,9 +168,9 @@ export const InsightsView: React.FC = () => {
             </div>
             <p className="text-sm text-stone-500 mb-6 italic">These pieces haven't seen the light in over 30 days.</p>
             <div className="flex-1 overflow-y-auto space-y-4 pr-2 no-scrollbar">
-              {forgottenItems.slice(0, 6).map(item => (
+              {(showAllForgotten ? forgottenItems : forgottenItems.slice(0, 6)).map(item => (
                 <div key={item.id} className="flex items-center gap-4 group cursor-pointer hover:bg-stone-50 p-2 -mx-2 rounded-xl transition-colors">
-                  <img src={item.image} className="w-14 h-14 rounded-lg object-cover bg-stone-100 shadow-sm" alt={item.name} />
+                  <img src={item.image || '/placeholder-garment.svg'} className="w-14 h-14 rounded-lg object-cover bg-stone-100 shadow-sm" alt={item.name} />
                   <div className="flex-1">
                     <p className="font-semibold text-stone-800 text-sm">{item.name}</p>
                     <p className="text-xs text-stone-400">Last worn: {item.lastWorn}</p>
@@ -137,9 +187,14 @@ export const InsightsView: React.FC = () => {
                 </div>
               ))}
             </div>
-            <button className="w-full py-3 mt-6 border border-stone-200 text-stone-400 text-xs font-bold uppercase tracking-widest hover:border-primary-500 hover:text-primary-500 transition-all rounded-xl">
-              View All Forgotten
-            </button>
+            {forgottenItems.length > 6 && (
+              <button 
+                onClick={() => setShowAllForgotten(!showAllForgotten)}
+                className="w-full py-3 mt-6 border border-stone-200 text-stone-400 text-xs font-bold uppercase tracking-widest hover:border-primary-500 hover:text-primary-500 transition-all rounded-xl"
+              >
+                {showAllForgotten ? "Show Less" : "View All Forgotten"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -192,7 +247,10 @@ export const InsightsView: React.FC = () => {
                     <span className="text-3xl font-bold text-primary-500">{mostWorn.wearCount}</span>
                     <span className="text-stone-400 text-sm ml-1">wears</span>
                   </div>
-                  <button className="px-4 py-2 bg-stone-900 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-primary-600 transition-colors">
+                  <button 
+                    onClick={() => setSelectedItemInfo(mostWorn)}
+                    className="px-4 py-2 bg-stone-900 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-primary-600 transition-colors"
+                  >
                     Details
                   </button>
                 </div>
@@ -208,7 +266,7 @@ export const InsightsView: React.FC = () => {
           <div className="bg-white p-8 rounded-2xl border border-stone-100 shadow-sm flex flex-col h-[480px]">
             <h3 className="text-xl font-bold text-stone-800 mb-6">Recent Outfits</h3>
             <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar">
-              {outfits.slice(0, 5).map((outfit) => (
+              {(showAllHistory ? outfits : outfits.slice(0, 5)).map((outfit) => (
                 <div 
                   key={outfit.id} 
                   onClick={() => setSelectedOutfit(outfit)}
@@ -217,7 +275,7 @@ export const InsightsView: React.FC = () => {
                   <div className="grid grid-cols-2 gap-0.5 w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-stone-100 shadow-sm">
                     {outfit.items.slice(0,4).map((itemId, i) => {
                       const item = wardrobe.find(w => w.id === itemId);
-                      return item ? <img key={i} src={item.image} className="w-full h-full object-cover" /> : null
+                      return item ? <img key={i} src={item.image || '/placeholder-garment.svg'} className="w-full h-full object-cover" /> : null
                     })}
                   </div>
                   <div>
@@ -227,9 +285,14 @@ export const InsightsView: React.FC = () => {
                 </div>
               ))}
             </div>
-            <button className="w-full py-3 mt-6 border border-stone-100 text-stone-400 text-[10px] font-bold uppercase tracking-widest hover:text-stone-800 transition-colors">
-              View History
-            </button>
+            {outfits.length > 5 && (
+              <button 
+                onClick={() => setShowAllHistory(!showAllHistory)}
+                className="w-full py-3 mt-6 border border-stone-100 text-stone-400 text-[10px] font-bold uppercase tracking-widest hover:text-stone-800 transition-colors"
+              >
+                {showAllHistory ? "Show Less" : "View History"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -311,6 +374,64 @@ export const InsightsView: React.FC = () => {
                   className="px-8 py-3 bg-stone-900 text-white text-xs font-bold uppercase tracking-widest hover:bg-primary-600 transition-colors rounded-xl"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item Detail Modal */}
+      {selectedItemInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-stone-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-serif italic text-stone-900">{selectedItemInfo.name}</h3>
+                <p className="text-xs font-bold tracking-widest uppercase text-stone-400 mt-1">{selectedItemInfo.category}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedItemInfo(null)}
+                className="p-2 text-stone-400 hover:text-stone-900 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-8">
+              <div className="w-full aspect-[4/5] sm:aspect-[3/4] bg-stone-100 rounded-xl overflow-hidden mb-6">
+                <img src={selectedItemInfo.image || '/placeholder-garment.svg'} className="w-full h-full object-cover" alt={selectedItemInfo.name} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                 <div>
+                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Color</p>
+                   <p className="font-serif text-stone-800">{selectedItemInfo.color || 'Unspecified'}</p>
+                 </div>
+                 <div>
+                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Last Worn</p>
+                   <p className="font-serif text-stone-800">{selectedItemInfo.lastWorn}</p>
+                 </div>
+                 <div>
+                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Wear Count</p>
+                   <p className="font-serif text-stone-800">{selectedItemInfo.wearCount}</p>
+                 </div>
+                 {selectedItemInfo.cost ? (
+                   <div>
+                     <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Cost / Wear</p>
+                     <p className="font-serif text-stone-800 border-b border-primary-200 inline">
+                       ${(selectedItemInfo.wearCount > 0 ? selectedItemInfo.cost / selectedItemInfo.wearCount : selectedItemInfo.cost).toFixed(2)}
+                     </p>
+                   </div>
+                 ) : null}
+              </div>
+
+              <div className="pt-6 border-t border-stone-100">
+                <button 
+                  onClick={() => setSelectedItemInfo(null)}
+                  className="w-full py-3 bg-stone-900 text-white text-xs font-bold uppercase tracking-widest hover:bg-primary-600 transition-colors rounded-xl"
+                >
+                  Close Details
                 </button>
               </div>
             </div>

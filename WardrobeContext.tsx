@@ -15,6 +15,7 @@ function apiItemToClothing(i: ApiItem): ClothingItem {
     color: i.color,
     brand: i.brand,
     addedDate: i.addedDate,
+    postponedUntil: i.postponedUntil,
     cost: i.cost ?? undefined,
   };
 }
@@ -30,7 +31,8 @@ interface WardrobeContextType {
   loading: boolean;
   addOutfit: (items: ClothingItem[], date: string, image?: File | null) => Promise<void>;
   updateItem: (item: ClothingItem) => Promise<void>;
-  addItem: (item: ClothingItem) => Promise<void>;
+  addItem: (item: ClothingItem) => Promise<ClothingItem>;
+  removeItem: (id: string) => Promise<void>;
   postponeItem: (itemId: string, date: string) => void;
 }
 
@@ -85,7 +87,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setWardrobe(prev => prev.map(item => item.id === updatedItem.id ? apiItemToClothing(apiItem) : item));
   }, []);
 
-  const addItem = useCallback(async (newItem: ClothingItem) => {
+  const addItem = useCallback(async (newItem: ClothingItem): Promise<ClothingItem> => {
     const apiItem = await itemsApi.create({
       name: newItem.name,
       category: newItem.category,
@@ -94,16 +96,29 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       cost: newItem.cost,
       image: newItem.image,
     });
-    setWardrobe(prev => [apiItemToClothing(apiItem), ...prev]);
+    const clothingItem = apiItemToClothing(apiItem);
+    setWardrobe(prev => [clothingItem, ...prev]);
+    return clothingItem;
   }, []);
 
-  // Postpone is kept local — no backend endpoint needed for MVP
-  const postponeItem = useCallback((itemId: string, date: string) => {
-    setWardrobe(prev => prev.map(item => item.id === itemId ? { ...item, postponedUntil: date } : item));
+  const removeItem = useCallback(async (id: string) => {
+    await itemsApi.remove(id);
+    setWardrobe(prev => prev.filter(item => item.id !== id));
+  }, []);
+
+  // Postpone persists to backend
+  const postponeItem = useCallback(async (itemId: string, date: string) => {
+    try {
+      const apiItem = await itemsApi.update(itemId, { postponedUntil: date } as any);
+      const clothingItem = apiItemToClothing(apiItem);
+      setWardrobe(prev => prev.map(item => item.id === itemId ? clothingItem : item));
+    } catch (err) {
+      console.error(err);
+    }
   }, []);
 
   return (
-    <WardrobeContext.Provider value={{ wardrobe, outfits, loading, addOutfit, updateItem, addItem, postponeItem }}>
+    <WardrobeContext.Provider value={{ wardrobe, outfits, loading, addOutfit, updateItem, addItem, removeItem, postponeItem }}>
       {children}
     </WardrobeContext.Provider>
   );

@@ -74,10 +74,54 @@ Development can proceed within **15 weeks**:
 - Google Cloud Vision API for computer vision support
 - Standard web technologies for the frontend (HTML/CSS/JavaScript or React)
 
-# Running the Frontend App
+# Running the Application
 
-**Prerequisites:** Node.js
+## Prerequisites
 
-1. Install dependencies: `npm install`
-2. Set the `GEMINI_API_KEY` in `.env.local` to your Gemini API key
-3. Run the app: `npm run dev`
+- **Node.js** (v18+) — for the Vite frontend
+- **Python 3.10+** — for the Flask backend
+- A Python virtual environment (recommended)
+
+---
+
+## 1. Install frontend dependencies
+
+```bash
+npm install
+```
+
+## 2. Set up the Python environment
+
+```bash
+# Create and activate a virtual environment (first time only)
+python3 -m venv venv
+source venv/bin/activate   # On Windows: venv\Scripts\activate
+
+# Install backend dependencies
+pip install -r requirements.txt
+```
+
+## 3. Configure environment variables
+
+The backend reads configuration from environment variables. Create a `.env` file in the project root or export the variables in your shell before starting
+the server.
+
+## 4. Start the Flask backend
+
+```bash
+cd rewear_app
+python app.py
+# Backend runs at http://localhost:5001
+```
+
+## 5. Start the Vite dev server
+
+Open a second terminal:
+
+```bash
+npm run dev
+# Frontend runs at http://localhost:3000
+```
+
+The Vite dev server proxies `/api/*` and `/uploads/*` requests to
+`http://localhost:5001`, so no CORS configuration is needed during development.
