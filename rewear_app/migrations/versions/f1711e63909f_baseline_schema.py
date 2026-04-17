@@ -1,9 +1,4 @@
 """baseline schema
-
-Revision ID: f1711e63909f
-Revises: 
-Create Date: 2026-04-15 18:14:37.624565
-
 """
 from alembic import op
 import sqlalchemy as sa

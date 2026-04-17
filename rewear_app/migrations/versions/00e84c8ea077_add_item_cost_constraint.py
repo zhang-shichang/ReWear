@@ -1,9 +1,4 @@
-"""add check constraint on item cost
-
-Revision ID: 00e84c8ea077
-Revises: f1711e63909f
-Create Date: 2026-04-15 18:27:40.059261
-
+"""add item cost constraint
 """
 from alembic import op
 import sqlalchemy as sa
