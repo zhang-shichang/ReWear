@@ -3,6 +3,7 @@ import os
 
 from flask import Flask
 from flask_cors import CORS
+from flask_migrate import Migrate
 from models import db
 from routes import auth_bp, items_bp, outfits_bp, detection_bp, uploads_bp
 
