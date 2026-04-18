@@ -1,5 +1,5 @@
 from flask import jsonify, session
-from models import db, User
+from .models import db, User
 
 
 def require_auth():

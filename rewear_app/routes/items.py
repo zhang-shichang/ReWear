@@ -6,8 +6,10 @@ import uuid
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.orm import joinedload
 from datetime import date, datetime
-from auth_guard import require_auth
-from serializers import item_to_dict
+from ..auth_guard import require_auth
+from ..serializers import item_to_dict
+from ..helpers import StorageHandler
+from ..models import db, Item, OutfitItem
 
 logger = logging.getLogger(__name__)
 
@@ -52,13 +54,11 @@ def create_item():
             if "png" in mime_part:
                 ext = ".png"
             image_bytes = base64.b64decode(b64_part)
-            filename = f"crop_{uuid.uuid4().hex}{ext}"
-            save_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-            with open(save_path, "wb") as f:
-                f.write(image_bytes)
-            image_val = f"/uploads/{filename}"
+            image_val = StorageHandler.save_file(
+                image_bytes, current_app.config["UPLOAD_FOLDER"], is_base64=True
+            )
         except Exception as e:
-            logger.error("Failed to decode base64 item image: %s", e)
+            logger.error("Failed to process item image: %s", e)
             return jsonify({"error": "invalid image data"}), 400
 
     item = Item(
@@ -123,13 +123,11 @@ def update_item(item_id):
                 if "png" in mime_part:
                     ext = ".png"
                 image_bytes = base64.b64decode(b64_part)
-                filename = f"crop_{uuid.uuid4().hex}{ext}"
-                save_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-                with open(save_path, "wb") as f:
-                    f.write(image_bytes)
-                image_val = f"/uploads/{filename}"
+                image_val = StorageHandler.save_file(
+                    image_bytes, current_app.config["UPLOAD_FOLDER"], is_base64=True
+                )
             except Exception as e:
-                logger.error("Failed to decode base64 item image: %s", e)
+                logger.error("Failed to process item image: %s", e)
         item.image_path = image_val
     try:
         db.session.commit()

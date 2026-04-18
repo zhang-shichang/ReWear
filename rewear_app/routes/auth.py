@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, session
-from models import db, User
-from auth_guard import require_auth
+from ..models import db, User
+from ..auth_guard import require_auth
 
 auth_bp = Blueprint("auth", __name__)
 

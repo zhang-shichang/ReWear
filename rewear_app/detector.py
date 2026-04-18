@@ -1,10 +1,15 @@
+import os
 import cv2
 import numpy as np
 from ultralytics import YOLO
 from sklearn.cluster import KMeans
+from dotenv import load_dotenv
 import base64
 import uuid
 from datetime import date
+
+# Ensure environment variables are loaded for this service
+load_dotenv()
 
 # Lazy-loaded model singleton
 _model = None
@@ -66,19 +71,25 @@ def load_model() -> YOLO:
     """Load and cache the detection model."""
     global _model, _using_fashion_model
     if _model is None:
+        # Configuration for the ML model backing service
+        repo_id = os.environ.get('ML_MODEL_REPO', "Bingsu/adetailer")
+        filename = os.environ.get('ML_MODEL_FILENAME', "deepfashion2_yolov8s-seg.pt")
+        fallback_model = os.environ.get('ML_MODEL_FALLBACK', "yolov8n.pt")
+
         try:
             # Try to load a fashion-specific model via HuggingFace hub
             from huggingface_hub import hf_hub_download
+            print(f"[detector] Attempting to download model from {repo_id}/{filename}...")
             path = hf_hub_download(
-                repo_id="Bingsu/adetailer",
-                filename="deepfashion2_yolov8s-seg.pt",
+                repo_id=repo_id,
+                filename=filename,
             )
             _model = YOLO(path)
             _using_fashion_model = True
-            print("[detector] Loaded DeepFashion2 segmentation model.")
+            print(f"[detector] Successfully attached model resource: {repo_id}")
         except Exception as e:
-            print(f"[detector] Fashion model unavailable ({e}), using COCO yolov8n.pt")
-            _model = YOLO("yolov8n.pt")
+            print(f"[detector] Fashion model resource unavailable ({e}), attaching local fallback: {fallback_model}")
+            _model = YOLO(fallback_model)
             _using_fashion_model = False
     return _model
 
