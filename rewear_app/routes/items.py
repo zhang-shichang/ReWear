@@ -6,6 +6,7 @@ import uuid
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.orm import joinedload
 from datetime import date, datetime
+from models import db, Item, OutfitItem
 from auth_guard import require_auth
 from serializers import item_to_dict
 
