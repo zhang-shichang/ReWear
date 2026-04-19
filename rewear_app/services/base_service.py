@@ -23,21 +23,23 @@ class BaseService(ABC):
         # 2. Validate (Domain logic)
         self.validate(processed_data)
         
-        # 3. Handle Files (Uploads)
-        if files:
-            file_results = self.handle_files(files)
-            processed_data.update(file_results)
+        # 3. Post-Validate Cleanup (Remove non-model fields)
+        self.post_validate(processed_data)
+        
+        # 4. Handle Files (Uploads/Base64)
+        file_results = self.handle_files(processed_data, files)
+        processed_data.update(file_results)
             
-        # 4. Instantiate
+        # 5. Instantiate
         resource = self.model(user_id=user_id, **processed_data)
         
-        # 5. Add to session so it's tracked (required before flush/relationships)
+        # 6. Add to session so it's tracked (required before flush/relationships)
         db.session.add(resource)
         
-        # 6. Post-instantiation (e.g. relationship handling)
+        # 7. Post-instantiation (e.g. relationship handling)
         self.post_create(resource, data)
         
-        # 7. Commit
+        # 8. Commit
         db.session.commit()
         
         return resource
@@ -51,7 +53,11 @@ class BaseService(ABC):
         """Domain-specific validation logic (must be implemented)."""
         pass
 
-    def handle_files(self, files):
+    def post_validate(self, data):
+        """Logic to clean up data after validation but before instantiation."""
+        pass
+
+    def handle_files(self, data, files):
         """Default file handling (can be overridden)."""
         return {}
 

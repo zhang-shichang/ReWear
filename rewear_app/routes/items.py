@@ -63,15 +63,14 @@ def create_item():
         
     data = request.get_json()
     from ..services.item_service import ItemService
+    from ..services.exceptions import ServiceError
     
     try:
         service = ItemService()
         item = service.create(user_id=user.id, data=data)
         return jsonify(item_to_dict(item)), 201
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except TypeError as e:
-        return jsonify({"error": str(e)}), 400
+    except ServiceError as e:
+        return jsonify({"error": str(e)}), e.code
     except Exception as e:
         logger.error("Failed to create item: %s", e)
         return jsonify({"error": "Internal server error"}), 500

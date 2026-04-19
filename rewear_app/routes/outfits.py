@@ -32,6 +32,7 @@ def create_outfit():
         return err
 
     from ..services.outfit_service import OutfitService
+    from ..services.exceptions import ServiceError
     service = OutfitService()
     
     # Extract data and files based on content type
@@ -46,9 +47,8 @@ def create_outfit():
     try:
         outfit = service.create(user_id=user.id, data=data, files=files)
         return jsonify(outfit_to_dict(outfit)), 201
-    except ValueError as e:
-        status_code = e.args[1] if len(e.args) > 1 else 400
-        return jsonify({"error": str(e.args[0])}), status_code
+    except ServiceError as e:
+        return jsonify({"error": str(e)}), e.code
     except Exception as e:
         logger.error("Failed to create outfit: %s", e)
         return jsonify({"error": "Internal server error"}), 500

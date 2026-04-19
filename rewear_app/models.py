@@ -8,6 +8,8 @@ class BaseModel(db.Model):
     """Base model with integer ID."""
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True)
+    # consideration: replace this built-in id with entity_id, although this can be complex to build.
+    # generally bad practice, but will need to redo the whole codebase
 
 class TimestampModel(BaseModel):
     """Base model that automatically records creation time."""

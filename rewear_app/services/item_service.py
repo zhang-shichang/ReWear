@@ -2,6 +2,7 @@ import os
 import base64
 import logging
 from flask import current_app
+from .exceptions import ValidationError
 from .base_service import BaseService
 from ..models import Item, db
 from ..helpers import StorageHandler
@@ -46,18 +47,21 @@ class ItemService(BaseService):
 
     def validate(self, data):
         if not data.get("name"):
-            raise ValueError("name is required")
+            raise ValidationError("name is required")
         if "cost" in data and data["cost"] is not None:
             if not isinstance(data["cost"], (int, float)):
-                raise TypeError("Invalid cost value")
+                raise ValidationError("Invalid cost value")
             if data["cost"] < 0:
-                raise ValueError("Cost cannot be negative")
+                raise ValidationError("Cost cannot be negative")
 
-    def handle_files(self, data):
+    def handle_files(self, data, files):
         # Handle Base64 image in JSON payload
         image_val = data.get("image", "")
         if image_val and image_val.startswith("data:image/"):
             try:
+                # Remove raw 'image' from data to prevent model construction errors
+                data.pop("image", None)
+                
                 mime_part, b64_part = image_val.split(",", 1)
                 ext = _ext_from_mime(mime_part)
                 image_bytes = base64.b64decode(b64_part)
@@ -72,18 +76,3 @@ class ItemService(BaseService):
                 logger.error("Failed to process item image: %s", e)
                 raise ValueError("invalid image data")
         return {}
-
-    def create(self, user_id, data):
-        """Override create to handle the Base64 image specifically."""
-        processed_data = self.pre_process(data)
-        self.validate(processed_data)
-        
-        file_results = self.handle_files(processed_data)
-        # Remove raw 'image' from data before creating model
-        processed_data.pop("image", None)
-        processed_data.update(file_results)
-        
-        resource = self.model(user_id=user_id, **processed_data)
-        db.session.add(resource)
-        db.session.commit()
-        return resource
