@@ -2,10 +2,11 @@ import base64
 import logging
 
 from flask import Blueprint, request, jsonify
-from auth_guard import require_auth
-from detector import detect_clothing
 import cv2
 import numpy as np
+
+from ..auth_guard import require_auth
+from ..detector import detect_clothing
 
 logger = logging.getLogger(__name__)
 

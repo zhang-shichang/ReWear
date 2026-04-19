@@ -1,11 +1,9 @@
-import os
-import uuid
-
 from flask import Blueprint, request, jsonify, current_app
-from models import db, Item, Outfit, OutfitItem
+from ..models import db, Item, Outfit, OutfitItem
 from datetime import date
-from auth_guard import require_auth
-from serializers import outfit_to_dict
+from ..auth_guard import require_auth
+from ..serializers import outfit_to_dict
+from ..helpers import StorageHandler
 
 outfits_bp = Blueprint("outfits", __name__)
 
@@ -37,13 +35,16 @@ def create_outfit():
         image_path = None
         if "image" in request.files:
             f = request.files["image"]
-            ext = os.path.splitext(f.filename)[1] if f.filename else '.jpg'
-            filename = f"{uuid.uuid4().hex}{ext}"
-            save_path = os.path.join(
-                current_app.config["UPLOAD_FOLDER"], filename
+            if not f.content_type or not f.content_type.startswith("image/"):
+                return jsonify({"error": "Only image files are allowed"}), 415
+            f.stream.seek(0, 2)
+            file_size = f.stream.tell()
+            f.stream.seek(0) 
+            if file_size > 10 * 1024 * 1024:
+                return jsonify({"error": "Image too large (max 10 MB)"}), 413
+            image_path = StorageHandler.save_file(
+                f, current_app.config["UPLOAD_FOLDER"]
             )
-            f.save(save_path)
-            image_path = f"/uploads/{filename}"
     else:
         data = request.get_json() or {}
         worn_date_str = data.get("date")

@@ -1,74 +1,105 @@
 import logging
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
-from models import db
-from routes import auth_bp, items_bp, outfits_bp, detection_bp, uploads_bp
+from .models import db
+from .routes import auth_bp, items_bp, outfits_bp, detection_bp, uploads_bp
 
 logger = logging.getLogger(__name__)
 
-def create_app(test_config=None):
-    """Application Factory to create and configure the Flask app."""
-    app = Flask(__name__)
+app = Flask(__name__)
 
-    # ── Configuration ─────────────────────────────────────────────────────────────
-    if test_config is None:
-        # Load standard configuration when NOT running tests
-        _secret_key = os.environ.get('SECRET_KEY')
-        if not _secret_key:
-            _secret_key = 'dev-secret-key-change-in-production'
-            logger.warning(
-                'SECRET_KEY env var not set — using insecure default. '
-                'Set SECRET_KEY in your environment before deploying.'
-            )
-        app.config['SECRET_KEY'] = _secret_key
-        
-        # Ensure database is in the instance folder relative to this file
-        _db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'database.db')
-        os.makedirs(os.path.dirname(_db_path), exist_ok=True)
-        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{_db_path}'
-    else:
-        # Load the testing configuration passed in from conftest.py
-        app.config.update(test_config)
+# ── Configuration ─────────────────────────────────────────────────────────────
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    _secret_key = 'dev-secret-key-change-in-production'
+    logger.warning(
+        'SECRET_KEY env var not set — using insecure default. '
+        'Set SECRET_KEY in your environment before deploying.'
+    )
+app.config['SECRET_KEY'] = _secret_key
+# Database Configuration
+_default_db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'database.db')
+_env_db_uri = os.environ.get('SQLALCHEMY_DATABASE_URI')
 
-    # Standard configs that apply regardless of environment
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+if not _env_db_uri:
+    os.makedirs(os.path.dirname(_default_db_path), exist_ok=True)
+    _env_db_uri = f'sqlite:///{_default_db_path}'
 
-    _production = os.environ.get('PRODUCTION', '').lower() in ('1', 'true', 'yes')
-    app.config['SESSION_COOKIE_SAMESITE'] = 'None' if _production else 'Lax'
-    app.config['SESSION_COOKIE_SECURE'] = _production
-    app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SQLALCHEMY_DATABASE_URI'] = _env_db_uri
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+_production = os.environ.get('PRODUCTION', '').lower() in ('1', 'true', 'yes')
+app.config['SESSION_COOKIE_SAMESITE'] = 'None' if _production else 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = _production
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+
+# Binary Asset Storage (Attached Resource)
+UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER')
+if not UPLOAD_FOLDER:
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-    # ── Extensions ────────────────────────────────────────────────────────────────
-    db.init_app(app)
-    Migrate(app, db, render_as_batch=True)
-    CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://localhost:3001"])
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-    # db.create_all() is no longer needed as we are using Flask-Migrate.
-    # Run 'flask db upgrade' from the terminal to apply schema changes.
+# ── Extensions ────────────────────────────────────────────────────────────────
+db.init_app(app)
+Migrate(app, db, render_as_batch=True)
 
-    # ── Blueprints ────────────────────────────────────────────────────────────────
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(items_bp)
-    app.register_blueprint(outfits_bp)
-    app.register_blueprint(detection_bp)
-    app.register_blueprint(uploads_bp)
+# CORS Configuration
+# In production, set CORS_ORIGINS to a comma-separated list of trusted domains
+# e.g. CORS_ORIGINS=https://rewear.app,https://www.rewear.app
+_cors_origins = os.environ.get('CORS_ORIGINS')
+if _cors_origins:
+    _cors_origins = [o.strip() for o in _cors_origins.split(',') if o.strip()]
+    if not _cors_origins:
+        _cors_origins = None
 
-    # ── Routes ────────────────────────────────────────────────────────────────────
-    @app.route("/")
-    def home():
-        return "ReWear backend is running!"
+if not _cors_origins:
+    if _production:
+        raise RuntimeError(
+            "CORS_ORIGINS must be explicitly set in production. "
+            "Example: CORS_ORIGINS=https://rewear.app,https://www.rewear.app"
+        )
+    
+    logger.warning(
+        'CORS_ORIGINS not set — defaulting to http://localhost:3000. '
+        'Set CORS_ORIGINS before deploying to production.'
+    ) # Development fallback
+    _cors_origins = ["http://localhost:3000"]
 
-    return app
+CORS(
+    app,
+    supports_credentials=True,
+    origins=_cors_origins,
+    # Explicitly whitelist the methods our API uses
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    # Explicitly whitelist headers the frontend sends
+    allow_headers=["Content-Type", "Authorization"],
+)
+
+# db.create_all() is no longer needed as we are using Flask-Migrate.
+# Run 'flask db upgrade' from the terminal to apply schema changes.
+
+# ── Blueprints ────────────────────────────────────────────────────────────────
+app.register_blueprint(auth_bp)
+app.register_blueprint(items_bp)
+app.register_blueprint(outfits_bp)
+app.register_blueprint(detection_bp)
+app.register_blueprint(uploads_bp)
+
+
+@app.route("/")
+def home():
+    return "ReWear backend is running!"
 
 
 if __name__ == "__main__":
-    # Create an app instance and run the dev server if executing this file directly
-    app = create_app()
-    app.run(debug=True, port=5001)
+    _port = int(os.environ.get('BACKEND_PORT', 5001))
+    app.run(debug=not _production, port=_port)

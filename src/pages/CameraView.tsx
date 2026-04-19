@@ -20,6 +20,7 @@ export const CameraView: React.FC = () => {
   const [isLogging, setIsLogging] = useState(false);
   const [isLogSuccess, setIsLogSuccess] = useState(false);
   const [logError, setLogError] = useState('');
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
   // ── Hooks ───────────────────────────────────────────────────────────────────
   const {
@@ -44,6 +45,7 @@ export const CameraView: React.FC = () => {
   const { videoRef, canvasRef, permissionError, startCamera, captureFrame } =
     useCameraCapture((dataUrl, file) => {
       setCapturedFile(file);
+      setCapturedImage(dataUrl);
       runDetection(dataUrl);
     });
 
@@ -76,6 +78,7 @@ export const CameraView: React.FC = () => {
     resetDetection();
     resetUpload();
     setCapturedFile(null);
+    setCapturedImage(null);
     setLogError('');
     setIsLogSuccess(false);
     setEditingItemId(null);
@@ -113,7 +116,7 @@ export const CameraView: React.FC = () => {
   };
 
   // The preview shown in the left panel: an uploaded/converted image takes priority
-  const previewImage = uploadedImage;
+  const previewImage = uploadedImage || capturedImage;
 
   return (
     <div className="flex h-[calc(100vh-80px)] w-full overflow-hidden bg-stone-900">

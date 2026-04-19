@@ -6,11 +6,40 @@ import uuid
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.orm import joinedload
 from datetime import date, datetime
-from models import db, Item, OutfitItem
-from auth_guard import require_auth
-from serializers import item_to_dict
+from ..auth_guard import require_auth
+from ..serializers import item_to_dict
+from ..helpers import StorageHandler
+from ..models import db, Item, OutfitItem
 
 logger = logging.getLogger(__name__)
+
+# Maps MIME sub-types (from data-URL headers) to file extensions.
+# Covers the formats a browser or desktop OS is likely to produce.
+_MIME_TO_EXT: dict[str, str] = {
+    "jpeg": ".jpg",
+    "jpg":  ".jpg",
+    "png":  ".png",
+    "webp": ".webp",
+    "gif":  ".gif",
+    "bmp":  ".bmp",
+    "tiff": ".tiff",
+}
+
+
+def _ext_from_mime(mime_part: str) -> str:
+    """Return the file extension for a data-URL MIME header.
+
+    Example input:  'data:image/png;base64'
+    Example output: '.png'
+    Falls back to '.jpg' for unknown types.
+    """
+    # mime_part looks like 'data:image/png;base64'
+    try:
+        subtype = mime_part.split("/")[1].split(";")[0].lower()
+    except IndexError:
+        return ".jpg"
+    return _MIME_TO_EXT.get(subtype, ".jpg")
+
 
 items_bp = Blueprint("items", __name__)
 
@@ -49,17 +78,13 @@ def create_item():
     if image_val and image_val.startswith("data:image/"):
         try:
             mime_part, b64_part = image_val.split(",", 1)
-            ext = ".jpg"
-            if "png" in mime_part:
-                ext = ".png"
+            ext = _ext_from_mime(mime_part)
             image_bytes = base64.b64decode(b64_part)
-            filename = f"crop_{uuid.uuid4().hex}{ext}"
-            save_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-            with open(save_path, "wb") as f:
-                f.write(image_bytes)
-            image_val = f"/uploads/{filename}"
+            image_val = StorageHandler.save_file(
+                image_bytes, current_app.config["UPLOAD_FOLDER"], is_base64=True, ext=ext
+            )
         except Exception as e:
-            logger.error("Failed to decode base64 item image: %s", e)
+            logger.error("Failed to process item image: %s", e)
             return jsonify({"error": "invalid image data"}), 400
 
     item = Item(
@@ -120,17 +145,13 @@ def update_item(item_id):
         if image_val and image_val.startswith("data:image/"):
             try:
                 mime_part, b64_part = image_val.split(",", 1)
-                ext = ".jpg"
-                if "png" in mime_part:
-                    ext = ".png"
+                ext = _ext_from_mime(mime_part)
                 image_bytes = base64.b64decode(b64_part)
-                filename = f"crop_{uuid.uuid4().hex}{ext}"
-                save_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-                with open(save_path, "wb") as f:
-                    f.write(image_bytes)
-                image_val = f"/uploads/{filename}"
+                image_val = StorageHandler.save_file(
+                    image_bytes, current_app.config["UPLOAD_FOLDER"], is_base64=True, ext=ext
+                )
             except Exception as e:
-                logger.error("Failed to decode base64 item image: %s", e)
+                logger.error("Failed to process item image: %s", e)
         item.image_path = image_val
     try:
         db.session.commit()

@@ -9,9 +9,15 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# App-specific exclusions
+# Application Data
+# Exclude local database and uploaded assets
 rewear_app/uploads/
+uploads/
 **/instance/
+*.db
+*.sqlite3
+.env
+.env.local
 
 # ML model weight files (large binaries, auto-downloaded at runtime)
 *.pt

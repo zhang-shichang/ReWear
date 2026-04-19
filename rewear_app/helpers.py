@@ -1,9 +1,51 @@
+import os
+import uuid
 from flask import jsonify, session
+from .models import db, User
+from werkzeug.utils import secure_filename
 
-if __package__:
-    from .models import db, User
-else:
-    from models import db, User
+class StorageHandler:
+    @staticmethod
+    def save_file(file_data, upload_folder, is_base64=False, ext='.jpg'):
+        """
+        Save file data to the configured storage provider and return the accessible URL/Path.
+        Supports both Werkzeug FileStorage objects and base64 bytes.
+
+        Args:
+            file_data:     Raw bytes (when is_base64=True) or a Werkzeug FileStorage object.
+            upload_folder: Destination directory on the local filesystem.
+            is_base64:     Set True when file_data contains raw decoded bytes.
+            ext:           File extension to use when is_base64=True (e.g. '.png', '.webp').
+                           Ignored for FileStorage uploads — extension is taken from the filename.
+        """
+        provider = os.environ.get('STORAGE_PROVIDER', 'LOCAL')
+
+        # Determine filename/extension
+        if is_base64:
+            filename = f"crop_{uuid.uuid4().hex}{ext}"
+        else:
+            safe_name = secure_filename(file_data.filename) if file_data.filename else ''
+            ext = os.path.splitext(safe_name)[1] if safe_name else '.jpg'
+            filename = f"{uuid.uuid4().hex}{ext}"
+
+        if provider == 'S3':
+            # This is where Boto3 logic would be added to support cloud storage.
+            # Example: s3.upload_fileobj(file_data, BUCKET, filename)
+            # return f"https://{BUCKET}.s3.amazonaws.com/{filename}"
+            raise NotImplementedError("S3 storage provider is not yet implemented. Please set STORAGE_PROVIDER=LOCAL.")
+
+        # Default: LOCAL Filesystem Storage
+        save_path = os.path.join(upload_folder, filename)
+        
+        if is_base64:
+            with open(save_path, "wb") as f:
+                f.write(file_data)
+        else:
+            file_data.save(save_path)
+            
+        return f"/uploads/{filename}"
+
+
 
 
 def require_auth():
