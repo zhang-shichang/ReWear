@@ -7,54 +7,97 @@ ReWear/
 ├── src/                              # Frontend source code (React + TypeScript)
 │   ├── api/                          # API client modules
 │   │   ├── client.ts                 # Base fetch helper & config
+│   │   ├── adapters.ts               # Backend ↔ frontend shape mapping
 │   │   ├── auth.ts                   # Auth endpoints
 │   │   ├── items.ts                  # Wardrobe item endpoints
 │   │   ├── outfits.ts                # Outfit logging endpoints
 │   │   └── detection.ts              # Clothing detection endpoint
 │   ├── components/                   # Reusable UI components
+│   │   ├── Navbar.tsx                # Top navigation bar
 │   │   ├── CreateItemModal.tsx       # New wardrobe item form
 │   │   ├── ItemCard.tsx              # Item thumbnail card
-│   │   ├── ItemDetailModal.tsx       # Item info overlay
-│   │   ├── Navbar.tsx                # Top navigation bar
+│   │   ├── ItemDetailModal.tsx       # Compact item info overlay (Insights)
 │   │   ├── OutfitDetailModal.tsx     # Outfit info overlay
 │   │   ├── PostponeModal.tsx         # Forgotten-item postpone dialog
-│   │   └── WardrobePickerModal.tsx   # Manual item picker for outfits
+│   │   ├── WardrobePickerModal.tsx   # Manual item picker for outfits
+│   │   ├── WardrobeToolbar.tsx       # Wardrobe page header & filters
+│   │   ├── WardrobeGrid.tsx          # Item grid with delete + empty state
+│   │   ├── ItemDetailEditModal.tsx   # Wardrobe item detail/edit modal
+│   │   ├── ItemImagePanel.tsx        # Image side of the edit modal
+│   │   ├── ItemFactsGrid.tsx         # Facts grid (color, cost, postpone…)
+│   │   ├── CameraStage.tsx           # Live feed + bbox overlays + toolbar
+│   │   ├── DetectionPanel.tsx        # Right-side detected-items panel
+│   │   ├── DetectedItemRow.tsx       # Single detection row (inline edit)
+│   │   ├── InsightsHeroStats.tsx     # Top-of-Insights stat cards
+│   │   ├── WeeklyActivityChart.tsx   # Bar chart of weekly outfit logs
+│   │   ├── ForgottenItemsCard.tsx    # 30+ day unused items list
+│   │   ├── CategorySplitChart.tsx    # Wardrobe category donut
+│   │   ├── MostWornCard.tsx          # Highlights the most-worn item
+│   │   └── RecentOutfitsCard.tsx     # Recent outfit history list
 │   ├── contexts/                     # React context providers
 │   │   ├── AuthContext.tsx           # Authentication state
 │   │   └── WardrobeContext.tsx       # Wardrobe & outfit state
+│   ├── hooks/                        # Reusable React hooks
+│   │   ├── useCameraCapture.ts       # getUserMedia + frame capture
+│   │   ├── useImageUpload.ts         # File-to-base64 upload pipeline
+│   │   ├── useDetection.ts           # YOLO detection request state
+│   │   └── useInsightsData.ts        # Derived stats for the Insights page
 │   ├── pages/                        # Page-level views
 │   │   ├── CameraView.tsx            # Live camera & photo upload detection
+│   │   ├── WardrobeView.tsx          # Wardrobe management
 │   │   ├── InsightsView.tsx          # Wear analytics & charts
 │   │   ├── InstructionsView.tsx      # How-to guide
 │   │   ├── LoginView.tsx
-│   │   ├── RegisterView.tsx
-│   │   └── WardrobeView.tsx          # Wardrobe management
+│   │   └── RegisterView.tsx
 │   ├── App.tsx                       # Root component & routing
 │   ├── index.tsx                     # React entry point
 │   ├── index.css
 │   └── types.ts                      # Shared TypeScript types
 ├── rewear_app/                       # Backend (Python / Flask)
+│   ├── __init__.py
 │   ├── app.py                        # App factory, config & blueprint registration
 │   ├── models.py                     # SQLAlchemy database models
-│   ├── helpers.py                    # Shared utilities (auth, serializers)
+│   ├── serializers.py                # Model → JSON serializers
+│   ├── helpers.py                    # Shared utilities (storage handler)
+│   ├── auth_guard.py                 # Session-auth decorator
 │   ├── detector.py                   # YOLO clothing detection module
-│   └── routes/                       # Flask blueprints
-│       ├── auth.py                   # /auth/* endpoints
-│       ├── items.py                  # /items/* endpoints
-│       ├── outfits.py                # /outfits/* & /uploads/* endpoints
-│       └── detection.py              # /detect endpoint
+│   ├── routes/                       # Flask blueprints
+│   │   ├── __init__.py
+│   │   ├── auth.py                   # /auth/* endpoints
+│   │   ├── items.py                  # /items/* endpoints
+│   │   ├── outfits.py                # /outfits/* endpoints
+│   │   ├── uploads.py                # /uploads/* endpoint
+│   │   └── detection.py              # /detect endpoint
+│   └── services/                     # Service-layer business logic
+│       ├── __init__.py
+│       ├── base_service.py           # Template-method base class
+│       ├── exceptions.py             # Domain exception hierarchy
+│       ├── item_service.py           # Wardrobe item operations
+│       ├── outfit_service.py         # Outfit creation & wear updates
+│       ├── storage_providers.py      # Local / S3 storage strategies
+│       └── wardrobe_manager.py       # Cross-service orchestrator
+├── tests/                            # Pytest backend test suite
+├── migrations/                       # Flask-Migrate Alembic scripts
 ├── docs/                             # Course documentation
 │   ├── Computer Vision Research/
 │   ├── Feedback/
 │   ├── Initial Design Ideas/
+│   ├── Project Management/           # Notion export: tasks, meeting notes
 │   ├── User Interviews/
+│   ├── README.md                     # #designthinking write-up
 │   └── schema.png                    # Database schema diagram
 ├── public/                           # Static assets served by Vite
 ├── index.html                        # Vite entry HTML
 ├── vite.config.ts                    # Vite config (dev server, proxy, aliases)
 ├── tsconfig.json                     # TypeScript config
 ├── package.json                      # Frontend dependencies & scripts
-└── requirements.txt                  # Python dependencies
+├── pytest.ini                        # Pytest configuration
+├── requirements.txt                  # Python dependencies
+├── build.py                          # Production build helper
+├── Procfile                          # Process definitions for deployment
+├── .env.example                      # Sample environment variables
+├── TESTING.md                        # Backend test suite overview
+└── README.md
 ```
 
 ## Running the Application
@@ -89,9 +132,10 @@ the server.
 
 ### 4. Start the Flask backend
 
+Run from the project root (the `rewear_app` package uses relative imports, so it must be invoked as a module):
+
 ```bash
-cd rewear_app
-python app.py
+python -m rewear_app.app
 # Backend runs at http://localhost:5001
 ```
 
@@ -120,6 +164,14 @@ Unit tests were added for the backend Flask application and cover:
 - Serialization helpers for API responses
 
 Detailed instructions and the full test suite summary are available in [TESTING.md](TESTING.md) and [tests/README.md](tests/README.md).
+
+---
+
+## #designthinking
+
+The ReWear team ran three interview rounds tied to progressively maturing product stages. Interview I (February, 11 respondents, concept stage) validated the core premise and converted user feedback into a feature-vote table that set MVP 1 scope (PR #12), also correcting the team's assumption that users had a strong preference between scanning and photo upload. Interview II (March, 2 respondents, working MVP) surfaced visual polish concerns and seasonal context limitations that directly drove the MVP 2 redesign (PR #19) and the "Postpone until" feature. Interview III (April, 4 respondents, near-final build) closed the loop, the redesign was praised and two final-sprint bugs were identified, culminating in MVP 3 (PR #26). The ~70% camera detection accuracy was acknowledged as a technical ceiling beyond CS162 scope.
+
+Read more in [docs/README.md](docs/README.md).
 
 ---
 
@@ -155,14 +207,6 @@ Each action takes about 10 seconds. As data is gathered, the app reveals insight
 - **After two weeks:** The app highlights which items appear most frequently in outfits
 - **After one month:** Users receive a high-level wardrobe utilization score showing how much of their closet is actually being used
 
-### MVP Features (15-week scope)
-
-- Fast, mobile-optimized outfit photo uploads
-- AI-assisted item tagging with user confirmation
-- Usage dashboard showing wear frequency per item and total unique items worn
-- Simple outfit history timeline
-- Weekly reminders highlighting "forgotten favs" (items not worn in 30+ days)
-
 An optional one-time closet log can be used to set a baseline, but it is not required for the web app to function.
 
 # Target Audience
@@ -181,19 +225,3 @@ Target users are students and young adults (Gen Z, ages 18–34) interested in f
 - People experimenting with capsule wardrobes
 - Individuals casually tracking clothing habits
 
-# Feasibility
-
-The project is feasible for a small team working part-time. Rewear relies on straightforward analytics (counting item occurrences in outfit logs), which makes the system easy to implement and debug.
-
-Development can proceed within **15 weeks**:
-
-- **Early weeks:** Setting up a simple, mobile-responsive frontend and core data structures
-- **Middle phase:** Outfit logging, item tagging, and usage aggregation
-- **Later weeks:** Visual analytics, basic recommendations, and light AI assistance for tagging
-- **Final phase:** Testing
-
-**Technical stack:**
-
-- Python/Flask backend with SQLAlchemy (SQLite)
-- YOLO-based computer vision for clothing detection
-- React + TypeScript frontend with Vite
