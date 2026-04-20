@@ -1,0 +1,36 @@
+# Use an official lightweight Python image
+FROM python:3.11-slim
+
+# Set working directory inside the container
+WORKDIR /app
+
+# Install system dependencies for OpenCV and other packages
+RUN apt-get update && apt-get install -y \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the application code
+COPY . .
+
+# Set environment variables
+ENV FLASK_APP=rewear_app/app.py
+ENV PYTHONUNBUFFERED=1
+ENV PRODUCTION=false
+# Point to existing yolov8n.pt inside rewear_app directory
+ENV ML_MODEL_FALLBACK=rewear_app/yolov8n.pt
+# Set a non-existent file for repo-based model to force fallback to local pt
+ENV ML_MODEL_FILENAME=FORCE_FALLBACK
+# Redirect YOLO config to a writable directory
+ENV YOLO_CONFIG_DIR=/tmp
+
+# Expose the internal backend port
+EXPOSE 5001
+
+# Run migrations and then start the application
+CMD ["sh", "-c", "flask db upgrade && gunicorn --bind 0.0.0.0:5001 --workers 2 --timeout 120 rewear_app.app:app"]
