@@ -103,10 +103,10 @@ def update_item(item_id):
         if raw_postpone:
             try:
                 item.postponed_until = date.fromisoformat(raw_postpone)
-            except ValueError:
-                # Silently ignore unparseable dates rather than 400 — the rest
-                # of the update is still valid and the client can retry.
-                pass
+            except (TypeError, ValueError):
+                return jsonify(
+                    {"error": "postponedUntil must be a valid ISO date (YYYY-MM-DD)"}
+                ), 400
         else:
             item.postponed_until = None
 
