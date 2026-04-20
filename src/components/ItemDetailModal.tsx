@@ -55,7 +55,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, onClose 
               <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Wear Count</p>
               <p className="font-serif text-stone-800">{item.wearCount}</p>
             </div>
-            {item.cost ? (
+            {item.cost != null ? (
               <div>
                 <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">
                   Cost / Wear
