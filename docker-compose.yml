@@ -10,7 +10,6 @@ services:
       - PRODUCTION=false
       - SQLALCHEMY_DATABASE_URI=sqlite:////app/instance/database.db
       - ML_MODEL_FALLBACK=rewear_app/yolov8n.pt
-      - ML_MODEL_FILENAME=FORCE_FALLBACK
       - CORS_ORIGINS=http://localhost
     volumes:
       - rewear-db:/app/instance

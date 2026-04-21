@@ -18,14 +18,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the application code
 COPY . .
 
+# Pre-download the fallback AI model weights during build
+# This ensures a "ready-to-run" experience without tracking binaries in Git
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')" && \
+    mv yolov8n.pt rewear_app/yolov8n.pt
+
 # Set environment variables
 ENV FLASK_APP=rewear_app/app.py
 ENV PYTHONUNBUFFERED=1
 ENV PRODUCTION=false
-# Point to existing yolov8n.pt inside rewear_app directory
+# Point to the baked-in weights
 ENV ML_MODEL_FALLBACK=rewear_app/yolov8n.pt
-# Set a non-existent file for repo-based model to force fallback to local pt
-ENV ML_MODEL_FILENAME=FORCE_FALLBACK
 # Redirect YOLO config to a writable directory
 ENV YOLO_CONFIG_DIR=/tmp
 
