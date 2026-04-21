@@ -96,53 +96,58 @@ ReWear/
 ├── build.py                          # Production build helper
 ├── Procfile                          # Process definitions for deployment
 ├── .env.example                      # Sample environment variables
+├── Dockerfile.backend                # Backend container config
+├── Dockerfile.frontend               # Frontend container config
+├── docker-compose.yml                # Main orchestration
+├── nginx.conf                        # Nginx reverse proxy
+├── .dockerignore                     # Docker ignore rules
 ├── TESTING.md                        # Backend test suite overview
 └── README.md
 ```
 
 ## Running the Application
 
-### Prerequisites
+### Option 1: Quick Start (Recommended)
 
-- **Node.js** (v18+) — for the Vite frontend
-- **Python 3.10+** — for the Flask backend
-- A Python virtual environment (recommended)
+The easiest way to run ReWear is using **Docker Compose**. This will automatically start the frontend, backend, and AI model without needing to install dependencies locally. Application data is persisted through a SQLite database file stored in Docker-managed persistent storage, rather than a separate database service.
 
-### 1. Install frontend dependencies
+1.  **Clone the repository** and navigate to the project root.
+2.  **Start the application**:
+    ```bash
+    docker compose up --build
+    ```
+3.  **Access the app**:
+    - Frontend: [http://localhost](http://localhost) (via Nginx proxy)
 
+*Note: The first build may take a few minutes as it installs dependencies and configures the AI environment.*
+
+### Option 2: Manual Development Setup
+
+If you prefer to run the components manually:
+
+#### Prerequisites
+- **Node.js** (v18+)
+- **Python 3.10+**
+
+#### 1. Install frontend dependencies
 ```bash
 npm install
 ```
 
-### 2. Set up the Python environment
-
+#### 2. Set up the Python environment
 ```bash
-# Create and activate a virtual environment (first time only)
 python3 -m venv venv
-source venv/bin/activate   # On Windows: venv\Scripts\activate
-
-# Install backend dependencies
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Configure environment variables
-
-The backend reads configuration from environment variables. Create a `.env` file in the project root or export the variables in your shell before starting
-the server.
-
-### 4. Start the Flask backend
-
-Run from the project root (the `rewear_app` package uses relative imports, so it must be invoked as a module):
-
+#### 3. Start the Flask backend
 ```bash
 python -m rewear_app.app
 # Backend runs at http://localhost:5001
 ```
 
-### 5. Start the Vite dev server
-
-Open a second terminal:
-
+#### 4. Start the Vite dev server
 ```bash
 npm run dev
 # Frontend runs at http://localhost:3000

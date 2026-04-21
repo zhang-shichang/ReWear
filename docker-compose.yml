@@ -1,0 +1,32 @@
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: rewear-backend
+    environment:
+      - SECRET_KEY=professor-grading-key-2026
+      - PRODUCTION=false
+      - SQLALCHEMY_DATABASE_URI=sqlite:////app/instance/database.db
+      - ML_MODEL_FALLBACK=rewear_app/yolov8n.pt
+      - CORS_ORIGINS=http://localhost
+    volumes:
+      - rewear-db:/app/instance
+      - rewear-uploads:/app/rewear_app/uploads
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: rewear-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  rewear-db:
+  rewear-uploads:
