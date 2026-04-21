@@ -109,7 +109,7 @@ ReWear/
 
 ### Option 1: Quick Start (Recommended)
 
-The easiest way to run ReWear is using **Docker Compose**. This will automatically set up the frontend, backend, database, and AI model without needing to install dependencies locally.
+The easiest way to run ReWear is using **Docker Compose**. This will automatically start the frontend, backend, and AI model without needing to install dependencies locally. Application data is persisted through a SQLite database file stored in Docker-managed persistent storage, rather than a separate database service.
 
 1.  **Clone the repository** and navigate to the project root.
 2.  **Start the application**:
